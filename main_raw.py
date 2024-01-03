@@ -33,13 +33,14 @@ def run_game(opening_moves: List[str], white_engine_path: str, black_engine_path
     board = chess.Board()
     for move in opening_moves:
         board.push_uci(move)
-
+    
     moves = copy.deepcopy(opening_moves)
     while not board.is_game_over(claim_draw=True):
         if board.turn == chess.WHITE:
             bestmove = get_bestmove(moves, white_engine)
         else:
             bestmove = get_bestmove(moves, black_engine)
+        print(bestmove)
         moves.append(bestmove)
         board.push_uci(bestmove)
     print(f"Game over with moves {moves}")
@@ -51,32 +52,37 @@ def boot_engine(engine_process: subprocess.Popen):
     engine_process.stdin.flush()
     print(engine_process.stdout.readline())
     print(engine_process.stdout.readline())
+    print(engine_process.stdout.readline())
+    print(engine_process.stdout.readline())
     engine_process.stdin.write("isready\n")
     engine_process.stdin.flush()
-    print(engine_process.stdout.readline())
-    engine_process.stdin.write("ucinewgame\n")
-    engine_process.stdin.flush()
+    print(engine_process.stdin.readline())
+    # for _ in range(5):
+    #     print(engine_process.stdin.readline())
 
 def get_bestmove(moves: List[str], engine_process:subprocess.Popen, w_time: Optional[float] = None, b_time: Optional[float] = None)-> str:
+    
     engine_process.stdin.write(get_position(moves))
     engine_process.stdin.flush()
     print("Got here")
     if w_time is not None and b_time is not None:
-        engine_process.stdin.write("go hi\n") # TODO: Add time tracking
+        engine_process.stdin.write("go infinite\n") # TODO: Add time tracking
+        engine_process.stdin.flush()
     else:
-        engine_process.stdin.write("go hi\n") 
+        engine_process.stdin.write("go infinite\n") 
+        engine_process.stdin.flush()
         print("Got here 2")
-    engine_process.stdin.flush()
-    best_move_line = engine_process.stdout.readline() #TODO: Handle more than 1 line of output
+    print("Got here 3")
+    best_move_line = engine_process.stdout.readline() # TODO: Handle more than 1 line of output
     best_move_split = best_move_line.split()
+    assert(best_move_split)
     return best_move_split[1]
 
 
     
 
 def get_position(moves: List[str]) -> str:
-    if (not moves):
-        print("position startpos \n")
+    if not moves:
         return "position startpos \n"
     position_arr = []
     position_arr.append("position startpos moves")
@@ -84,7 +90,6 @@ def get_position(moves: List[str]) -> str:
     for move in moves:
         position_arr.append(move)
     position_arr.append("\n")
-    print(f'\"{" ".join(position_arr)}\"')
     return " ".join(position_arr)
 
 
