@@ -2,9 +2,22 @@
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["wheatley_tester"]
+package-dir = {"" = "src"}
+
+[tool.isort]
+profile = "black"
+
 [project]
-name = "wheatley_bot_tester"
-version = "0.0.1"
+name = "wheatley_tester"
+version = "0.1.0"
 dependencies = [
     "chess",
 ]
+
+[project.scripts]
+integration-test = "wheatley_tester.main:main"
+
+[project.optional-dependencies]
+dev = ["black", "isort", "ruff", "mypy"]
