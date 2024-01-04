@@ -1,14 +1,17 @@
 import argparse
 import copy
 import subprocess
+import time
 from typing import List, Optional
-import time 
+
 import chess
 
 DEFAULT_ENGINE_PATH = (
     "/home/joseph/personal_projects/wheatley_bot/target/release/wheatley_bot"
 )
 DEFAULT_TIME_SECONDS = 1
+DEFAULT_TRIES = 200
+SLEEP_START_TIME = 0.05
 
 
 def get_parser():
@@ -25,8 +28,6 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    print(args.NewEngine)
-    print(args.OldEngine)
     run_game([], args.NewEngine, args.OldEngine)
 
 
@@ -34,7 +35,6 @@ def run_game(opening_moves: List[str], white_engine_path: str, black_engine_path
     white_engine = subprocess.Popen(
         white_engine_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
-    # print(type(white_engine))
     black_engine = subprocess.Popen(
         black_engine_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
@@ -51,7 +51,6 @@ def run_game(opening_moves: List[str], white_engine_path: str, black_engine_path
             bestmove = get_bestmove(moves, white_engine)
         else:
             bestmove = get_bestmove(moves, black_engine)
-        print(bestmove)
         moves.append(bestmove)
         board.push_uci(bestmove)
     print(f"Game over with moves {moves}")
@@ -60,15 +59,18 @@ def run_game(opening_moves: List[str], white_engine_path: str, black_engine_path
 
 
 def boot_engine(engine_process: subprocess.Popen):
+    print(f"bootline = {blocking_readline(engine_process)}")
+    assert engine_process.stdout is not None
+    assert engine_process.stdin is not None
     engine_process.stdin.write("uci\n")
     engine_process.stdin.flush()
-    print(engine_process.stdout.readline())
-    print(engine_process.stdout.readline())
-    print(engine_process.stdout.readline())
-    print(engine_process.stdout.readline())
+    print(f"UCI response line 1 = {blocking_readline(engine_process)}")
+    print(f"UCI response line 2 = {blocking_readline(engine_process)}")
+    print(f"UCI response line 3 = {blocking_readline(engine_process)}")
+    print(f"UCI response line uciok = {blocking_readline(engine_process)}")
     engine_process.stdin.write("isready\n")
     engine_process.stdin.flush()
-    print(engine_process.stdout.readline())
+    print(f"UCI response line ready_ok = {blocking_readline(engine_process)}")
     # for _ in range(5):
     #     print(engine_process.stdin.readline())
 
@@ -79,23 +81,36 @@ def get_bestmove(
     w_time: Optional[float] = None,
     b_time: Optional[float] = None,
 ) -> str:
+    assert engine_process.stdout is not None
+    assert engine_process.stdin is not None
     engine_process.stdin.write(get_position(moves))
     engine_process.stdin.flush()
-    print("Got here")
     if w_time is not None and b_time is not None:
         engine_process.stdin.write("go infinite\n")  # TODO: Add time tracking
         engine_process.stdin.flush()
     else:
         engine_process.stdin.write("go infinite\n")
         engine_process.stdin.flush()
-        print("Got here 2")
-    print("Got here 3")
-    best_move_line = (
-        engine_process.stdout.readline()
+    best_move_line = blocking_readline(
+        engine_process
     )  # TODO: Handle more than 1 line of output
     best_move_split = best_move_line.split()
     assert best_move_split
     return best_move_split[1]
+
+
+def blocking_readline(engine_process: subprocess.Popen):
+    assert engine_process.stdout is not None
+    line = None
+    counter = 0
+    while line is None and counter <= DEFAULT_TRIES:
+        line = engine_process.stdout.readline()
+        counter += 1
+        if line is None:
+            time.sleep(SLEEP_START_TIME * (counter**2))
+    if line is None:
+        raise AssertionError("Number of tries failed")
+    return line
 
 
 def get_position(moves: List[str]) -> str:
