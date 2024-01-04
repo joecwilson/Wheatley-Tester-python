@@ -2,11 +2,11 @@ import argparse
 import copy
 import subprocess
 from typing import List, Optional
-
+import time 
 import chess
 
 DEFAULT_ENGINE_PATH = (
-    "/home/joseph/personalProjects/wheatley_bot/target/release/wheatley_bot"
+    "/home/joseph/personal_projects/wheatley_bot/target/release/wheatley_bot"
 )
 DEFAULT_TIME_SECONDS = 1
 
@@ -68,7 +68,7 @@ def boot_engine(engine_process: subprocess.Popen):
     print(engine_process.stdout.readline())
     engine_process.stdin.write("isready\n")
     engine_process.stdin.flush()
-    print(engine_process.stdin.readline())
+    print(engine_process.stdout.readline())
     # for _ in range(5):
     #     print(engine_process.stdin.readline())
 
