@@ -2,6 +2,7 @@ import argparse
 import copy
 import subprocess
 import time
+from enum import Enum, auto
 from typing import List, Optional
 
 import chess
@@ -12,6 +13,40 @@ DEFAULT_ENGINE_PATH = (
 DEFAULT_TIME_SECONDS = 1
 DEFAULT_TRIES = 200
 SLEEP_START_TIME = 0.05
+
+
+class GameOutcome(Enum):
+    WHITE_WIN_MATE = (auto(),)
+    WHITE_WIN_TIME = (auto(),)
+    WHITE_WIN_FOREFIT = (auto(),)
+    BLACK_WIN_MATE = (auto(),)
+    BLACK_WIN_TIME = (auto(),)
+    BLACK_WIN_FOREFIT = (auto(),)
+    DRAW = (auto(),)
+    STALEMATE = (auto(),)
+
+    def is_white_win(self):
+        return (
+            self is GameOutcome.WHITE_WIN_MATE
+            or self is GameOutcome.WHITE_WIN_TIME
+            or self is GameOutcome.WHITE_WIN_FOREFIT
+        )
+
+    def is_black_win(self):
+        return (
+            self is GameOutcome.BLACK_WIN_MATE
+            or self is GameOutcome.BLACK_WIN_TIME
+            or self is GameOutcome.BLACK_WIN_FOREFIT
+        )
+
+    def is_drawn(self):
+        return self is GameOutcome.DRAW or self is GameOutcome.STALEMATE
+
+    def is_forefit(self):
+        return (
+            self is GameOutcome.BLACK_WIN_FOREFIT
+            or self is GameOutcome.WHITE_WIN_FOREFIT
+        )
 
 
 def get_parser():
@@ -28,10 +63,18 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    run_game([], args.NewEngine, args.OldEngine)
+    run_match([], args.NewEngine, args.OldEngine)
 
 
-def run_game(opening_moves: List[str], white_engine_path: str, black_engine_path: str):
+def run_match(opening_moves: List[str], new_engine_path: str, old_engine_path: str):
+    new_as_white_outcome = run_game(opening_moves, new_engine_path, old_engine_path)
+    new_as_black_outcome = run_game(opening_moves, old_engine_path, new_engine_path)
+    return [new_as_white_outcome, new_as_black_outcome]
+
+
+def run_game(
+    opening_moves: List[str], white_engine_path: str, black_engine_path: str
+) -> GameOutcome:
     white_engine = subprocess.Popen(
         white_engine_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
@@ -56,6 +99,25 @@ def run_game(opening_moves: List[str], white_engine_path: str, black_engine_path
     print(f"Game over with moves {moves}")
     white_engine.terminate()
     black_engine.terminate()
+    outcome = board.outcome(claim_draw=True)
+    assert outcome is not None
+    if outcome.termination == chess.Termination.STALEMATE:
+        return GameOutcome.STALEMATE
+    elif outcome.termination == chess.Termination.INSUFFICIENT_MATERIAL:
+        return GameOutcome.DRAW
+    elif outcome.termination == chess.Termination.SEVENTYFIVE_MOVES:
+        return GameOutcome.DRAW
+    elif outcome.termination == chess.Termination.FIVEFOLD_REPETITION:
+        return GameOutcome.DRAW
+    elif outcome.termination == chess.Termination.FIFTY_MOVES:
+        return GameOutcome.DRAW
+    elif outcome.termination == chess.Termination.THREEFOLD_REPETITION:
+        return GameOutcome.DRAW
+    assert outcome.winner is not None
+    if outcome.winner == chess.WHITE:
+        return GameOutcome.WHITE_WIN_MATE
+    else:
+        return GameOutcome.BLACK_WIN_MATE
 
 
 def boot_engine(engine_process: subprocess.Popen):
