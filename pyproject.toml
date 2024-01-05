@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 integration-test = "wheatley_tester.main:main"
+generate-openings = "wheatley_tester.opening_generator:main"
 
 [project.optional-dependencies]
 dev = ["black", "isort", "ruff", "mypy"]

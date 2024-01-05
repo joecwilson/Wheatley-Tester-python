@@ -76,7 +76,13 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     match_results = []
-    match_results.extend(run_match([], args.NewEngine, args.OldEngine))
+    openings = [[]]
+    openings.extend(parse_opening_book())
+    counter = 0
+    for opening in openings:
+        print(f"Working on opening {counter}")
+        match_results.extend(run_match(opening, args.NewEngine, args.OldEngine))
+        counter += 1
     losses, wins, draws, forefits = num_losses_wins_draws_forefits(match_results)
     passed_run = True
     if forefits > 0:
@@ -96,6 +102,15 @@ def main():
     if not passed_run:
         exit(1)
 
+
+def parse_opening_book() -> List[List[str]]:
+    result = []
+    with open("OpeningBook.txt") as f:
+        lines = f.readlines()
+    for line in lines:
+        result.append(line.split())
+    return result
+        
 
 def run_match(
     opening_moves: List[str], new_engine_path: str, old_engine_path: str
