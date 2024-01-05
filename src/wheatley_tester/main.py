@@ -93,7 +93,6 @@ def main():
         draws,
         forefits,
     )
-    passed_run = False
     if not passed_run:
         exit(1)
 
