@@ -148,7 +148,6 @@ def run_game(
             bestmove = get_bestmove(moves, black_engine)
         moves.append(bestmove)
         board.push_uci(bestmove)
-    print(f"Game over with moves {moves}")
     white_engine.terminate()
     black_engine.terminate()
     outcome = board.outcome(claim_draw=True)
@@ -173,21 +172,18 @@ def run_game(
 
 
 def boot_engine(engine_process: subprocess.Popen):
-    print(f"bootline = {blocking_readline(engine_process)}")
+    blocking_readline(engine_process)
     assert engine_process.stdout is not None
     assert engine_process.stdin is not None
     engine_process.stdin.write("uci\n")
     engine_process.stdin.flush()
-    print(f"UCI response line 1 = {blocking_readline(engine_process)}")
-    print(f"UCI response line 2 = {blocking_readline(engine_process)}")
-    print(f"UCI response line 3 = {blocking_readline(engine_process)}")
-    print(f"UCI response line uciok = {blocking_readline(engine_process)}")
+    blocking_readline(engine_process)
+    blocking_readline(engine_process)
+    blocking_readline(engine_process)
+    blocking_readline(engine_process)
     engine_process.stdin.write("isready\n")
     engine_process.stdin.flush()
-    print(f"UCI response line ready_ok = {blocking_readline(engine_process)}")
-    # for _ in range(5):
-    #     print(engine_process.stdin.readline())
-
+    blocking_readline(engine_process)
 
 def get_bestmove(
     moves: List[str],
@@ -213,7 +209,7 @@ def get_bestmove(
     return best_move_split[1]
 
 
-def blocking_readline(engine_process: subprocess.Popen):
+def blocking_readline(engine_process: subprocess.Popen, should_print:bool = False):
     assert engine_process.stdout is not None
     line = None
     counter = 0
@@ -224,6 +220,8 @@ def blocking_readline(engine_process: subprocess.Popen):
             time.sleep(SLEEP_START_TIME * (counter**2))
     if line is None:
         raise AssertionError("Number of tries failed")
+    if should_print:
+        print(line)
     return line
 
 
