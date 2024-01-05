@@ -93,6 +93,9 @@ def main():
         draws,
         forefits,
     )
+    passed_run = False
+    if not passed_run:
+        exit(1)
 
 
 def run_match(
@@ -185,6 +188,7 @@ def boot_engine(engine_process: subprocess.Popen):
     engine_process.stdin.flush()
     blocking_readline(engine_process)
 
+
 def get_bestmove(
     moves: List[str],
     engine_process: subprocess.Popen,
@@ -209,7 +213,7 @@ def get_bestmove(
     return best_move_split[1]
 
 
-def blocking_readline(engine_process: subprocess.Popen, should_print:bool = False):
+def blocking_readline(engine_process: subprocess.Popen, should_print: bool = False):
     assert engine_process.stdout is not None
     line = None
     counter = 0
@@ -272,7 +276,9 @@ def write_games_to_disk(
     with open(filename, "w") as f:
         f.write(f"Test run {formatted_time} {'passed' if passed else 'failed'}\n")
         f.write(f"Old Engine = {old_engine_path} \nNew Engine = {new_engine_path}\n")
-        f.write(f"Wins = {wins}, losses = {losses}, draws = {draws}, forefits = {forefits}\n")
+        f.write(
+            f"Wins = {wins}, losses = {losses}, draws = {draws}, forefits = {forefits}\n"
+        )
         for game_run in games:
             write_game_to_disk(game_run, f)
 
