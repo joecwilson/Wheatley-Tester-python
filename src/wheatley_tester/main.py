@@ -2,8 +2,10 @@ import argparse
 import copy
 import subprocess
 import time
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum, auto
-from typing import List, Optional
+from typing import List, Optional, TextIO, Tuple
 
 import chess
 
@@ -49,6 +51,16 @@ class GameOutcome(Enum):
         )
 
 
+@dataclass
+class GameResult:
+    is_drawn: bool
+    outcome: GameOutcome
+    new_engine_win: bool
+    new_engine_loss: bool
+    moves: List[str]
+    opening_moves: List[str]
+
+
 def get_parser():
     parser = argparse.ArgumentParser(
         prog="Wheatley Bot Tester",
@@ -63,18 +75,58 @@ def get_parser():
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    run_match([], args.NewEngine, args.OldEngine)
+    match_results = []
+    match_results.extend(run_match([], args.NewEngine, args.OldEngine))
+    losses, wins, draws, forefits = num_losses_wins_draws_forefits(match_results)
+    passed_run = True
+    if forefits > 0:
+        passed_run = False
+    if wins > losses:
+        passed_run = False
+    write_games_to_disk(
+        match_results,
+        args.NewEngine,
+        args.OldEngine,
+        passed_run,
+        losses,
+        wins,
+        draws,
+        forefits,
+    )
 
 
-def run_match(opening_moves: List[str], new_engine_path: str, old_engine_path: str):
-    new_as_white_outcome = run_game(opening_moves, new_engine_path, old_engine_path)
-    new_as_black_outcome = run_game(opening_moves, old_engine_path, new_engine_path)
-    return [new_as_white_outcome, new_as_black_outcome]
+def run_match(
+    opening_moves: List[str], new_engine_path: str, old_engine_path: str
+) -> Tuple[GameResult, GameResult]:
+    new_as_white_outcome, new_as_white_moves = run_game(
+        opening_moves, new_engine_path, old_engine_path
+    )
+    new_as_black_outcome, new_as_black_moves = run_game(
+        opening_moves, old_engine_path, new_engine_path
+    )
+
+    new_as_white_result = GameResult(
+        is_drawn=new_as_white_outcome.is_drawn(),
+        outcome=new_as_white_outcome,
+        new_engine_win=new_as_white_outcome.is_white_win(),
+        new_engine_loss=new_as_white_outcome.is_black_win(),
+        moves=new_as_white_moves,
+        opening_moves=opening_moves,
+    )
+    new_as_black_result = GameResult(
+        is_drawn=new_as_black_outcome.is_drawn(),
+        outcome=new_as_black_outcome,
+        new_engine_win=new_as_black_outcome.is_black_win(),
+        new_engine_loss=new_as_black_outcome.is_white_win(),
+        moves=new_as_black_moves,
+        opening_moves=opening_moves,
+    )
+    return (new_as_white_result, new_as_black_result)
 
 
 def run_game(
     opening_moves: List[str], white_engine_path: str, black_engine_path: str
-) -> GameOutcome:
+) -> Tuple[GameOutcome, List[str]]:
     white_engine = subprocess.Popen(
         white_engine_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
@@ -102,22 +154,22 @@ def run_game(
     outcome = board.outcome(claim_draw=True)
     assert outcome is not None
     if outcome.termination == chess.Termination.STALEMATE:
-        return GameOutcome.STALEMATE
+        return (GameOutcome.STALEMATE, moves)
     elif outcome.termination == chess.Termination.INSUFFICIENT_MATERIAL:
-        return GameOutcome.DRAW
+        return (GameOutcome.DRAW, moves)
     elif outcome.termination == chess.Termination.SEVENTYFIVE_MOVES:
-        return GameOutcome.DRAW
+        return (GameOutcome.DRAW, moves)
     elif outcome.termination == chess.Termination.FIVEFOLD_REPETITION:
-        return GameOutcome.DRAW
+        return (GameOutcome.DRAW, moves)
     elif outcome.termination == chess.Termination.FIFTY_MOVES:
-        return GameOutcome.DRAW
+        return (GameOutcome.DRAW, moves)
     elif outcome.termination == chess.Termination.THREEFOLD_REPETITION:
-        return GameOutcome.DRAW
+        return (GameOutcome.DRAW, moves)
     assert outcome.winner is not None
     if outcome.winner == chess.WHITE:
-        return GameOutcome.WHITE_WIN_MATE
+        return (GameOutcome.WHITE_WIN_MATE, moves)
     else:
-        return GameOutcome.BLACK_WIN_MATE
+        return (GameOutcome.BLACK_WIN_MATE, moves)
 
 
 def boot_engine(engine_process: subprocess.Popen):
@@ -185,6 +237,52 @@ def get_position(moves: List[str]) -> str:
         position_arr.append(move)
     position_arr.append("\n")
     return " ".join(position_arr)
+
+
+def num_losses_wins_draws_forefits(
+    games: List[GameResult],
+) -> Tuple[int, int, int, int]:
+    losses = 0
+    wins = 0
+    draws = 0
+    forefits = 0
+    for game in games:
+        if game.new_engine_loss:
+            losses += 1
+        if game.new_engine_win:
+            wins += 1
+        if game.outcome.is_forefit():
+            forefits += 1
+        if game.is_drawn:
+            draws += 1
+    return (losses, wins, draws, forefits)
+
+
+def write_games_to_disk(
+    games: List[GameResult],
+    old_engine_path: str,
+    new_engine_path: str,
+    passed: bool,
+    losses: int,
+    wins: int,
+    draws: int,
+    forefits: int,
+):
+    now = datetime.now()
+    formatted_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    filename = f"GameResults-{formatted_time}.txt"
+    with open(filename, "w") as f:
+        f.write(f"Test run {formatted_time} {'passed' if passed else 'failed'}\n")
+        f.write(f"Old Engine = {old_engine_path} \nNew Engine = {new_engine_path}\n")
+        f.write(f"Wins = {wins}, losses = {losses}, draws = {draws}, forefits = {forefits}\n")
+        for game_run in games:
+            write_game_to_disk(game_run, f)
+
+
+def write_game_to_disk(game: GameResult, file: TextIO):
+    file.write(f"Outcome = {game.outcome.name}\n")
+    file.write(f"Opening = {game.opening_moves}\n")
+    file.write(f"Moves = {game.moves}\n")
 
 
 if __name__ == "__main__":
