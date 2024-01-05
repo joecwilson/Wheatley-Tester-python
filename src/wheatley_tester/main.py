@@ -110,7 +110,7 @@ def parse_opening_book() -> List[List[str]]:
     for line in lines:
         result.append(line.split())
     return result
-        
+
 
 def run_match(
     opening_moves: List[str], new_engine_path: str, old_engine_path: str

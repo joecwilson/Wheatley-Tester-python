@@ -1,7 +1,7 @@
+import random
+from typing import List, Optional
+
 import chess
-import random
-from typing import List
-import random
 
 
 def main():
@@ -12,7 +12,7 @@ def main():
             opening = generate_opening(random.randint(4, 8))
         openings.append(opening)
     save_openings(openings)
-        
+
 
 def save_openings(openings: List[List[str]]):
     with open("OpeningBook.txt", "w") as f:
@@ -21,7 +21,8 @@ def save_openings(openings: List[List[str]]):
                 f.write(f"{move} ")
             f.write("\n")
 
-def generate_opening(depth: int) -> List[str]:
+
+def generate_opening(depth: int) -> Optional[List[str]]:
     board = chess.Board()
     moves = []
     while depth > 0:
@@ -29,7 +30,7 @@ def generate_opening(depth: int) -> List[str]:
         legal_moves = []
         for move in board.legal_moves:
             legal_moves.append(move)
-            
+
         selected_move = random.choice(legal_moves)
         moves.append(selected_move.uci())
         board.push(selected_move)
@@ -37,6 +38,7 @@ def generate_opening(depth: int) -> List[str]:
         if board.is_game_over(claim_draw=True):
             return None
     return moves
+
 
 if __name__ == "__main__":
     main()
