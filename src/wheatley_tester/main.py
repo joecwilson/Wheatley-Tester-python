@@ -92,8 +92,8 @@ def main():
         passed_run = False
     write_games_to_disk(
         match_results,
-        args.NewEngine,
         args.OldEngine,
+        args.NewEngine,
         passed_run,
         losses,
         wins,
