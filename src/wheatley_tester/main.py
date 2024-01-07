@@ -8,6 +8,7 @@ from enum import Enum, auto
 from typing import List, Optional, TextIO, Tuple
 
 import chess
+import chess.pgn
 
 DEFAULT_ENGINE_PATH = (
     "/home/joseph/personal_projects/wheatley_bot/target/release/wheatley_bot"
@@ -302,6 +303,16 @@ def write_game_to_disk(game: GameResult, file: TextIO):
     file.write(f"Opening = {game.opening_moves}\n")
     moves_as_string = " ".join(game.moves)
     file.write(f"Moves = {moves_as_string}\n")
+
+    pgn_game = chess.pgn.Game()
+    node = pgn_game.add_variation(chess.Move.from_uci(game.moves[0]))
+    opening_end = len(game.opening_moves) - 2
+    exporter = chess.pgn.FileExporter(file)
+    for idx, move in enumerate(game.moves[1:]):
+        node = node.add_variation(chess.Move.from_uci(move))
+        if idx == opening_end:
+            node.comment = "End Of Opening"
+    pgn_game.accept(exporter)
 
 
 if __name__ == "__main__":
