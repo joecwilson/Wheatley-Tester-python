@@ -300,7 +300,8 @@ def write_games_to_disk(
 def write_game_to_disk(game: GameResult, file: TextIO):
     file.write(f"Outcome = {game.outcome.name}\n")
     file.write(f"Opening = {game.opening_moves}\n")
-    file.write(f"Moves = {game.moves}\n")
+    moves_as_string = " ".join(game.moves)
+    file.write(f"Moves = {moves_as_string}\n")
 
 
 if __name__ == "__main__":
