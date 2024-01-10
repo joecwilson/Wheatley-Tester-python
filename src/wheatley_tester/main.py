@@ -5,28 +5,25 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
-from typing import List, Optional, TextIO, Tuple
+from typing import Any, List, Optional, TextIO, Tuple
 
 import chess
 import chess.pgn
 
-DEFAULT_ENGINE_PATH = (
-    "/home/joseph/personal_projects/wheatley_bot/target/release/wheatley_bot"
-)
 DEFAULT_TIME_SECONDS = 1
 DEFAULT_TRIES = 200
 SLEEP_START_TIME = 0.05
 
 
 class GameOutcome(Enum):
-    WHITE_WIN_MATE = (auto(),)
-    WHITE_WIN_TIME = (auto(),)
-    WHITE_WIN_FOREFIT = (auto(),)
-    BLACK_WIN_MATE = (auto(),)
-    BLACK_WIN_TIME = (auto(),)
-    BLACK_WIN_FOREFIT = (auto(),)
-    DRAW = (auto(),)
-    STALEMATE = (auto(),)
+    WHITE_WIN_MATE = auto()
+    WHITE_WIN_TIME = auto()
+    WHITE_WIN_FOREFIT = auto()
+    BLACK_WIN_MATE = auto()
+    BLACK_WIN_TIME = auto()
+    BLACK_WIN_FOREFIT = auto()
+    DRAW = auto()
+    STALEMATE = auto()
 
     def is_white_win(self):
         return (
@@ -62,13 +59,38 @@ class GameResult:
     opening_moves: List[str]
 
 
+class UCIType(Enum):
+    CHECK = auto()
+    SPIN = auto()
+    COMBO = auto()
+    BUTTON = auto()
+    STRING = auto()
+
+
+@dataclass
+class UCIOption:
+    name: str
+    uci_type: UCIType
+    default: Optional[Any] = None
+    minimum: Optional[Any] = None
+    maximum: Optional[Any] = None
+    var: Optional[List[Any]] = None
+
+
+@dataclass
+class UCIID:
+    name: str
+    author: str
+    options: List[UCIOption]
+
+
 def get_parser():
     parser = argparse.ArgumentParser(
         prog="Wheatley Bot Tester",
         description="Tests UCI compatable chess engines that pefer to lose",
     )
-    parser.add_argument("NewEngine", default=DEFAULT_ENGINE_PATH)
-    parser.add_argument("OldEngine", default=DEFAULT_ENGINE_PATH)
+    parser.add_argument("NewEngine")
+    parser.add_argument("OldEngine")
     parser.add_argument("--time-limit", type=int, default=DEFAULT_TIME_SECONDS)
     return parser
 
@@ -85,6 +107,20 @@ def main():
         match_results.extend(run_match(opening, args.NewEngine, args.OldEngine))
         counter += 1
     losses, wins, draws, forefits = num_losses_wins_draws_forefits(match_results)
+
+    # Lets parse the name
+    new_engine = subprocess.Popen(
+        args.NewEngine, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
+    old_engine = subprocess.Popen(
+        args.OldEngine, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
+    old_engine_id = boot_engine(old_engine)
+    new_engine_id = boot_engine(new_engine)
+
+    new_engine.terminate()
+    old_engine.terminate()
+
     passed_run = True
     if forefits > 0:
         passed_run = False
@@ -92,8 +128,8 @@ def main():
         passed_run = False
     write_games_to_disk(
         match_results,
-        args.OldEngine,
-        args.NewEngine,
+        old_engine_id.name,
+        new_engine_id.name,
         passed_run,
         losses,
         wins,
@@ -116,12 +152,18 @@ def parse_opening_book() -> List[List[str]]:
 def run_match(
     opening_moves: List[str], new_engine_path: str, old_engine_path: str
 ) -> Tuple[GameResult, GameResult]:
-    new_as_white_outcome, new_as_white_moves = run_game(
-        opening_moves, new_engine_path, old_engine_path
-    )
-    new_as_black_outcome, new_as_black_moves = run_game(
-        opening_moves, old_engine_path, new_engine_path
-    )
+    (
+        new_as_white_outcome,
+        new_as_white_moves,
+        new_as_white_white_id,
+        new_as_white_black_id,
+    ) = run_game(opening_moves, new_engine_path, old_engine_path)
+    (
+        new_as_black_outcome,
+        new_as_black_moves,
+        new_as_black_white_id,
+        new_as_black_black_id,
+    ) = run_game(opening_moves, old_engine_path, new_engine_path)
 
     new_as_white_result = GameResult(
         is_drawn=new_as_white_outcome.is_drawn(),
@@ -144,15 +186,15 @@ def run_match(
 
 def run_game(
     opening_moves: List[str], white_engine_path: str, black_engine_path: str
-) -> Tuple[GameOutcome, List[str]]:
+) -> Tuple[GameOutcome, List[str], UCIID, UCIID]:
     white_engine = subprocess.Popen(
         white_engine_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
     black_engine = subprocess.Popen(
         black_engine_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
-    boot_engine(white_engine)
-    boot_engine(black_engine)
+    white_engine_id = boot_engine(white_engine)
+    black_engine_id = boot_engine(black_engine)
 
     board = chess.Board()
     for move in opening_moves:
@@ -171,37 +213,78 @@ def run_game(
     outcome = board.outcome(claim_draw=True)
     assert outcome is not None
     if outcome.termination == chess.Termination.STALEMATE:
-        return (GameOutcome.STALEMATE, moves)
+        return (GameOutcome.STALEMATE, moves, white_engine_id, black_engine_id)
     elif outcome.termination == chess.Termination.INSUFFICIENT_MATERIAL:
-        return (GameOutcome.DRAW, moves)
+        return (GameOutcome.DRAW, moves, white_engine_id, black_engine_id)
     elif outcome.termination == chess.Termination.SEVENTYFIVE_MOVES:
-        return (GameOutcome.DRAW, moves)
+        return (GameOutcome.DRAW, moves, white_engine_id, black_engine_id)
     elif outcome.termination == chess.Termination.FIVEFOLD_REPETITION:
-        return (GameOutcome.DRAW, moves)
+        return (GameOutcome.DRAW, moves, white_engine_id, black_engine_id)
     elif outcome.termination == chess.Termination.FIFTY_MOVES:
-        return (GameOutcome.DRAW, moves)
+        return (GameOutcome.DRAW, moves, white_engine_id, black_engine_id)
     elif outcome.termination == chess.Termination.THREEFOLD_REPETITION:
-        return (GameOutcome.DRAW, moves)
+        return (GameOutcome.DRAW, moves, white_engine_id, black_engine_id)
     assert outcome.winner is not None
     if outcome.winner == chess.WHITE:
-        return (GameOutcome.WHITE_WIN_MATE, moves)
+        return (GameOutcome.WHITE_WIN_MATE, moves, white_engine_id, black_engine_id)
     else:
-        return (GameOutcome.BLACK_WIN_MATE, moves)
+        return (GameOutcome.BLACK_WIN_MATE, moves, white_engine_id, black_engine_id)
 
 
-def boot_engine(engine_process: subprocess.Popen):
-    blocking_readline(engine_process)
+def boot_engine(engine_process: subprocess.Popen) -> UCIID:
     assert engine_process.stdout is not None
     assert engine_process.stdin is not None
+    blocking_readline(engine_process)
     engine_process.stdin.write("uci\n")
     engine_process.stdin.flush()
-    blocking_readline(engine_process)
-    blocking_readline(engine_process)
-    blocking_readline(engine_process)
-    blocking_readline(engine_process)
+
+    line = blocking_readline(engine_process)
+    lines = [line]
+    while line != "uciok\n":
+        line = blocking_readline(engine_process)
+        lines.append(line)
+
     engine_process.stdin.write("isready\n")
     engine_process.stdin.flush()
     blocking_readline(engine_process)
+    return parse_options(lines)
+
+
+def parse_options(lines: List[str]) -> UCIID:
+    name = ""
+    author = ""
+    options = []
+    for line in lines:
+        line_split = line.split()
+        if line_split[0] == "id":
+            if line_split[1] == "name":
+                name = " ".join(line_split[2:])
+            if line_split[1] == "author":
+                author = " ".join(line_split[2:])
+        elif line_split[0] == "option":
+            # Assume that it is name type default
+            option_name = line_split[2]
+            option_type_str = line_split[4]
+            option_type = None
+            match option_type_str:
+                case "check":
+                    option_type = UCIType.CHECK
+                case "spin":
+                    option_type = UCIType.SPIN
+                case "combo":
+                    option_type = UCIType.COMBO
+                case "button":
+                    option_type = UCIType.BUTTON
+                case "string":
+                    option_type = UCIType.STRING
+                case _:
+                    raise AssertionError("Unexpected type")
+            option_default = line_split[6]
+            option = UCIOption(
+                name=option_name, uci_type=option_type, default=option_default
+            )
+            options.append(option)
+    return UCIID(name=name, author=author, options=options)
 
 
 def get_bestmove(
