@@ -57,6 +57,8 @@ class GameResult:
     new_engine_loss: bool
     moves: List[str]
     opening_moves: List[str]
+    white_engine_name: str
+    black_engine_name: str
 
 
 class UCIType(Enum):
@@ -106,6 +108,7 @@ def main():
         print(f"Working on opening {counter}")
         match_results.extend(run_match(opening, args.NewEngine, args.OldEngine))
         counter += 1
+    # match_results.extend(run_match(openings[0], args.NewEngine, args.OldEngine))
     losses, wins, draws, forefits = num_losses_wins_draws_forefits(match_results)
 
     # Lets parse the name
@@ -172,6 +175,8 @@ def run_match(
         new_engine_loss=new_as_white_outcome.is_black_win(),
         moves=new_as_white_moves,
         opening_moves=opening_moves,
+        white_engine_name=new_as_white_white_id.name,
+        black_engine_name=new_as_white_black_id.name,
     )
     new_as_black_result = GameResult(
         is_drawn=new_as_black_outcome.is_drawn(),
@@ -180,6 +185,8 @@ def run_match(
         new_engine_loss=new_as_black_outcome.is_white_win(),
         moves=new_as_black_moves,
         opening_moves=opening_moves,
+        white_engine_name=new_as_black_white_id.name,
+        black_engine_name=new_as_black_black_id.name,
     )
     return (new_as_white_result, new_as_black_result)
 
@@ -391,6 +398,8 @@ def write_game_to_disk(game: GameResult, file: TextIO):
     node = pgn_game.add_variation(chess.Move.from_uci(game.moves[0]))
     opening_end = len(game.opening_moves) - 2
     exporter = chess.pgn.FileExporter(file)
+    pgn_game.headers["White"] = game.white_engine_name
+    pgn_game.headers["Black"] = game.black_engine_name
     for idx, move in enumerate(game.moves[1:]):
         node = node.add_variation(chess.Move.from_uci(move))
         if idx == opening_end:
